@@ -174,6 +174,14 @@ public:
     virtual void run()
     {
         if(!mj_data_) return;
+        // LOCAL PATCH (cpp_control): not before mjData::sensordata is real, or
+        // the first thing every subscriber sees is an all-zero robot at the
+        // origin. See param::physics_ready.
+        if(!param::physics_ready.load()) return;
+        // LOCAL PATCH (cpp_control): tell the physics thread a controller is
+        // actually commanding. isTimeout() is false only once a LowCmd has
+        // been received, so this cannot be faked by an all-zero first message.
+        if(!lowcmd->isTimeout()) { param::lowcmd_received = true; }
         if(lowstate->joystick) { lowstate->joystick->update(); }
         // lowcmd
         {

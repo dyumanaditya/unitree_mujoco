@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <iostream>
 #include <boost/program_options.hpp>
 #include <yaml-cpp/yaml.h>
@@ -8,6 +9,22 @@
 
 namespace param
 {
+
+// LOCAL PATCH (cpp_control): set by the bridge the first time a LowCmd has been
+// received. With --wait-for-cmd, the physics does not advance until then.
+inline std::atomic<bool> lowcmd_received{false};
+
+// LOCAL PATCH (cpp_control): set by PhysicsThread once the model is loaded and
+// mj_forward has run, which is when mjData::sensordata first holds anything.
+//
+// The bridge thread is a free-running 1 kHz RecurrentThread and starts before
+// that: measured, it published 124 SportModeState messages with position
+// exactly (0,0,0) over ~130 ms before the first mj_forward. A consumer that
+// acts on its first state message -- which is what a controller waiting on the
+// plant does -- reads a robot lying at the origin and calls it a fall. Publish
+// nothing at all until the state is real; a late first message is something
+// every consumer already handles, a wrong one is not.
+inline std::atomic<bool> physics_ready{false};
 
 constexpr int IDL_AUTO = -1;
 constexpr int IDL_GO = 0;
@@ -61,6 +78,11 @@ inline struct SimulationConfig
     int enable_elastic_band;
     int band_attached_link = 0;
 
+    // LOCAL PATCH (cpp_control): hold the simulation at its reset state until a
+    // controller has actually commanded something. Off by default -- upstream
+    // behaviour is unchanged and a simulator started on its own still runs.
+    bool wait_for_cmd = false;
+
     void load_from_yaml(const std::string &filename)
     {
         auto cfg = YAML::LoadFile(filename);
@@ -103,6 +125,8 @@ inline po::variables_map helper(int argc, char** argv)
         ("robot,r", po::value<std::string>(&config.robot), "Robot type; -r go2")
         ("scene,s", po::value<std::filesystem::path>(&config.robot_scene), "Robot scene file; -s scene_terrain.xml")
         ("idl_type,t", po::value<int>(&config.idl_type), "DDS IDL type: -1 auto, 0 unitree_go, 1 unitree_hg")
+        ("wait-for-cmd,c", po::bool_switch(&config.wait_for_cmd),
+         "hold the physics at the reset state until the first LowCmd arrives")
     ;
 
     po::variables_map vm;
