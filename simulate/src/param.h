@@ -83,6 +83,10 @@ inline struct SimulationConfig
     // behaviour is unchanged and a simulator started on its own still runs.
     bool wait_for_cmd = false;
 
+    // LOCAL PATCH (cpp_control): run the physics with no viewer -- no GLFW, no
+    // window, no display. See HeadlessPhysics in main.cc. Off by default.
+    bool headless = false;
+
     void load_from_yaml(const std::string &filename)
     {
         auto cfg = YAML::LoadFile(filename);
@@ -127,6 +131,8 @@ inline po::variables_map helper(int argc, char** argv)
         ("idl_type,t", po::value<int>(&config.idl_type), "DDS IDL type: -1 auto, 0 unitree_go, 1 unitree_hg")
         ("wait-for-cmd,c", po::bool_switch(&config.wait_for_cmd),
          "hold the physics at the reset state until the first LowCmd arrives")
+        ("headless,H", po::bool_switch(&config.headless),
+         "run the physics at 1x with no viewer window (no GLFW, no display needed)")
     ;
 
     po::variables_map vm;
